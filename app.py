@@ -1,65 +1,55 @@
-import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
-
-# Set up the Chrome driver with detach option
-options = Options()
-options.add_experimental_option("detach", True)
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service, options=options)
+import openpyxl
+import requests
+from bs4 import BeautifulSoup
+import urllib.parse
 
 # Load the Excel file
-df = pd.read_excel('4BeatsQ1.xlsx')
+file_path = '4BeatsQ1.xlsx'
+wb = openpyxl.load_workbook(file_path)
+sheet = wb.active
 
-longest_options = []
-shortest_options = []
+# Define the columns for keywords, longest, and shortest options
+keyword_col = 3  # Column C
+longest_col = 4  # Column D
+shortest_col = 5  # Column E
 
-for keyword in df['Keyword']:
-    print(f"Searching for keyword: {keyword}")
+# Function to search Google and retrieve search result snippets
+def get_search_results(keyword):
+    query = urllib.parse.quote(keyword)
+    url = f"https://www.google.com/search?q={query}"
     
-    # Perform Google search
-    driver.get('https://www.google.com')
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36"
+    }
     
-    # Wait for the search box to be present
-    search_box = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.NAME, 'q'))
-    )
-    search_box.send_keys(keyword)
-    search_box.send_keys(Keys.RETURN)
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
     
-    # Wait for the results to load
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, 'h3'))
-    )
+    # Extract all the search result snippets
+    snippets = soup.find_all('span', class_='aCOpRe')
+    results = [snippet.get_text() for snippet in snippets]
     
-    # Extract search results
-    results = driver.find_elements(By.CSS_SELECTOR, 'h3')
-    options = [result.text for result in results if result.text]
-
-    if options:
-        longest_option = max(options, key=len)
-        shortest_option = min(options, key=len)
+    if results:
+        longest_result = max(results, key=len)
+        shortest_result = min(results, key=len)
+        return longest_result, shortest_result
     else:
-        longest_option = ''
-        shortest_option = ''
+        return None, None
 
-    longest_options.append(longest_option)
-    shortest_options.append(shortest_option)
+# Iterate over the keywords in the Excel file and update with results
+for row in range(2, sheet.max_row + 1):
+    keyword = sheet.cell(row=row, column=keyword_col).value
+    
+    if keyword:
+        print(f"Searching for: {keyword}")
+        longest, shortest = get_search_results(keyword)
+        
+        # Update the Excel sheet with the longest and shortest results
+        if longest:
+            sheet.cell(row=row, column=longest_col).value = longest
+        if shortest:
+            sheet.cell(row=row, column=shortest_col).value = shortest
 
-    print(f"Longest option: {longest_option}")
-    print(f"Shortest option: {shortest_option}")
-
-# Close the driver (optional, remove this line if you want to keep the browser open)
-# driver.quit()
-
-# Write results back to Excel
-df['Longest Option'] = longest_options
-df['Shortest Option'] = shortest_options
-df.to_excel('updated_file.xlsx', index=False)
+# Save the updated Excel file
+wb.save('updated_' + file_path)
+print("Excel file updated successfully.")
