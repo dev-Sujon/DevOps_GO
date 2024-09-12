@@ -1,0 +1,6 @@
+selenium==4.5.0
+webdriver-manager==3.8.3
+pytest==7.1.2
+pytest-html==3.1.1
+appium-python-client==2.8.0
+
